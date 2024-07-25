@@ -25,13 +25,15 @@ public class ConnectFour {
     private Random rand;
 
     // Bot
-    private final int AiSkillset_1 = 100;
+    private final int BotSkillset_1 = 100;
+    private final int BotSkillset_2 = 70;
+    private final int BotMoveTimeMillisec = 100;
 
     // Minimax
     private Dictionary<String, Integer> moveScores = new Hashtable<>();
-    private int AlphaBetaPruningIterCount = 0;
-    private final int AlphaBetaMaxDepth = 8;
-    private final boolean showCount = false;
+    private int AlphaBetaPruningIterCount;
+    private final int AlphaBetaMaxDepth = 9;
+    private final boolean showCount = true;
 
     /**
      * Constructs a new Connect Four instance.
@@ -42,6 +44,9 @@ public class ConnectFour {
                 board[column][row] = empty;
             }
         }
+
+        currentPlayer = player_1;
+
         input = new Scanner(System.in);
         rand = new Random();
 
@@ -252,7 +257,6 @@ public class ConnectFour {
      */
     public void twoPlayerScenario() {
         String winner = null;
-        currentPlayer = player_1;
         while (winner == null) {
             boolean validMove = false;
             System.out.println("\nCurrent player: " + currentPlayer);
@@ -416,11 +420,38 @@ public class ConnectFour {
                 if (currentPlayer == player_1) {
                     validMove = receiveInput(); // human move
                 } else {
-                    validMove = humanPlayerSimulator(AiSkillset_1); // Bot move
+                    validMove = humanPlayerSimulator(BotSkillset_1); // Bot move
                 }
             }
             System.out.println(this);
             winner = checkWinner();
+        }
+        endingMessage(winner);
+    }
+
+    /**
+     * Game mode where a two Bot programs face off against each other.
+     * The terminal will show their game.
+     */
+    public void BotScenario() {
+        String winner = null;
+
+        while (winner == null) {
+            boolean validMove = false;
+            while (!validMove) {
+                if (currentPlayer == player_1) {
+                    validMove = humanPlayerSimulator(BotSkillset_1);
+                } else {
+                    validMove = humanPlayerSimulator(BotSkillset_2);
+                }
+            }
+            System.out.println(this);
+            winner = checkWinner();
+            try {
+                Thread.sleep(BotMoveTimeMillisec);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         endingMessage(winner);
     }
@@ -434,10 +465,10 @@ public class ConnectFour {
      */
     public int gameOptions() {
         System.out.println("Welcome to Connect 4!");
-        System.out.println("How many human players are there (1 or 2) ?");
+        System.out.println("How many human players are there (0 or 1 or 2) ?");
         String inputString = input.next();
         int choice = Integer.valueOf(inputString);
-        if (choice != 1 && choice != 2)
+        if (choice != 0 && choice != 1 && choice != 2)
             return -1;
         return choice;
     }
@@ -456,6 +487,9 @@ public class ConnectFour {
             twoPlayerScenario();
         if (gameMode == 1)
             humanAiScenario();
+        if (gameMode == 0)
+            BotScenario();
+
     }
 
 }
