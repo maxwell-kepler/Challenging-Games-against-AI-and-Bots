@@ -1,19 +1,37 @@
 package ConnectFour;
 
+import java.util.ArrayList;
+import java.util.Dictionary;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Random;
 import java.util.Scanner;
 
 public class ConnectFour {
+    // Board
     private final int columnCount = 7;
     private final int rowCount = 6;
     private String board[][] = new String[columnCount][rowCount];
 
+    // Player
     private final String player_1 = "R";
     private final String player_2 = "Y";
     private final String tie = "tie";
     private final String empty = " ";
     private String currentPlayer;
 
+    // Util
     private Scanner input;
+    private Random rand;
+
+    // Bot
+    private final int AiSkillset_1 = 100;
+
+    // Minimax
+    private Dictionary<String, Integer> moveScores = new Hashtable<>();
+    private int AlphaBetaPruningIterCount = 0;
+    private final int AlphaBetaMaxDepth = 8;
+    private final boolean showCount = false;
 
     /**
      * Constructs a new Connect Four instance.
@@ -24,10 +42,12 @@ public class ConnectFour {
                 board[column][row] = empty;
             }
         }
-
-        currentPlayer = player_1;
         input = new Scanner(System.in);
+        rand = new Random();
 
+        moveScores.put(player_2, 10);
+        moveScores.put(player_1, -10);
+        moveScores.put(tie, 0);
     }
 
     /**
@@ -165,7 +185,6 @@ public class ConnectFour {
      *         otherwise.
      */
     private boolean receiveInput() {
-        System.out.println("\nCurrent player: " + currentPlayer);
         System.out.print("Enter the column where you'd like to drop your piece: ");
         String inputString = input.next();
         int column = Integer.valueOf(inputString);
@@ -233,8 +252,10 @@ public class ConnectFour {
      */
     public void twoPlayerScenario() {
         String winner = null;
+        currentPlayer = player_1;
         while (winner == null) {
             boolean validMove = false;
+            System.out.println("\nCurrent player: " + currentPlayer);
             while (!validMove) {
                 if (currentPlayer == player_1) {
                     validMove = receiveInput();
@@ -249,10 +270,192 @@ public class ConnectFour {
     }
 
     /**
+     * Simulates a human player.
+     * Does this by generating a value between 0 and 99.
+     * If this value is greater than the threshold, the Bot will do a random move.
+     * Otherwise, the bot will find it's move using a minimax search
+     * 
+     * @param threshold Value between 0 and 100, indicate the likelyhood of the Bot
+     *                  making a random move. If set to 100, the Bot will play near
+     *                  perfectly.
+     * @return boolean value indicating if the move was successful, should almost
+     *         always be true.
+     */
+    private boolean humanPlayerSimulator(int threshold) {
+
+        int action = rand.nextInt(100);
+        if (action > threshold)
+            return randomMove();
+        else
+            return bestMoveWithAlphaBetaPruning();
+    }
+
+    /**
+     * Drops a piece in a random column that isn't full.
+     * 
+     * @return boolean value indicating if the move was successful
+     */
+    private boolean randomMove() {
+        List<Integer> validColumns = new ArrayList<>();
+        for (int i = 0; i < columnCount; i++) {
+            if (board[i][0] == empty)
+                validColumns.add(i);
+        }
+        int index = rand.nextInt(validColumns.size());
+        return validateInput(validColumns.get(index));
+    }
+
+    /**
+     * Drops a piece in the column with the best score.
+     * The score is determined from the minimax algorithm using Alpha Beta pruning.
+     * If it's the first move of the game, drops the piece in the middle column.
+     * 
+     * @return boolean value indicating if the move was successful
+     */
+    public boolean bestMoveWithAlphaBetaPruning() {
+        int bestScore = Integer.MIN_VALUE;
+        int move_col = -1;
+        AlphaBetaPruningIterCount = 0;
+
+        if (openSpots() == 7 * 6)
+            return validateInput(3);
+
+        for (int col = 0; col < columnCount; col++) {
+            if (board[col][0] == empty) {
+                int availableRow = dropsToRow(col, board);
+                board[col][availableRow] = player_2;
+                int score = minimaxAlphaBetaPruning(board, 0, Integer.MIN_VALUE, Integer.MAX_VALUE, false);
+
+                board[col][availableRow] = empty;
+                if (score > bestScore) {
+                    bestScore = score;
+                    move_col = col;
+                }
+            }
+        }
+        if (showCount)
+            System.out.println("\nAB: " + AlphaBetaPruningIterCount);
+        return validateInput(move_col);
+    }
+
+    /**
+     * Mimimax algorithm using Alpha Beta Pruning.
+     * Pruning lets us perform less calculations if a better outcome is known.
+     * 
+     * @param boardInstance Current state of the board
+     * @param depth         Current depth of the recursion algorithm (how many moves
+     *                      ahead are we looking?). To help with computation times,
+     *                      a max depth is set.
+     * @param alpha         Alpha value, set to pseudo -inf initially
+     * @param beta          Alpha value, set to pseudo inf initially
+     * @param isMaximizing  Determines if the algorithm is trying to maximize or
+     *                      minimize the score
+     * @return The best score for the current depth.
+     */
+    private int minimaxAlphaBetaPruning(String[][] boardInstance, int depth, int alpha, int beta,
+            boolean isMaximizing) {
+        AlphaBetaPruningIterCount++;
+        if (depth > AlphaBetaMaxDepth)
+            return moveScores.get(tie);
+
+        String result = checkWinner();
+        if (result != null)
+            return moveScores.get(result);
+
+        if (isMaximizing) {
+            int bestScore = Integer.MIN_VALUE;
+            for (int col = 0; col < columnCount; col++) {
+                if (boardInstance[col][0] == empty) {
+                    int availableRow = dropsToRow(col, boardInstance);
+                    boardInstance[col][availableRow] = player_2;
+                    int score = minimaxAlphaBetaPruning(boardInstance, depth + 1, alpha, beta, false);
+                    boardInstance[col][availableRow] = empty;
+                    bestScore = Math.max(score, bestScore);
+
+                    alpha = Math.max(alpha, score);
+                    if (beta <= alpha)
+                        break;
+                }
+            }
+            return bestScore;
+        } else {
+            int bestScore = Integer.MAX_VALUE;
+            for (int col = 0; col < columnCount; col++) {
+                if (boardInstance[col][0] == empty) {
+                    int availableRow = dropsToRow(col, boardInstance);
+                    boardInstance[col][availableRow] = player_1;
+                    int score = minimaxAlphaBetaPruning(boardInstance, depth + 1, alpha, beta, true);
+                    boardInstance[col][availableRow] = empty;
+                    bestScore = Math.min(score, bestScore);
+
+                    beta = Math.min(beta, score);
+                    if (beta <= alpha)
+                        break;
+                }
+
+            }
+            return bestScore;
+        }
+    }
+
+    /**
+     * Game mode where a human player face off against an Bot program.
+     * The terminal will prompt them for their moves.
+     */
+    public void humanAiScenario() {
+        System.out.println("Would you like to go first? (1 for yes, 0 for no)");
+        String inputString = input.next();
+        int choice = Integer.valueOf(inputString);
+        currentPlayer = (choice == 1) ? player_1 : player_2;
+
+        String winner = null;
+        while (winner == null) {
+            boolean validMove = false;
+            System.out.println("\nCurrent player: " + currentPlayer);
+            while (!validMove) {
+                if (currentPlayer == player_1) {
+                    validMove = receiveInput(); // human move
+                } else {
+                    validMove = humanPlayerSimulator(AiSkillset_1); // Bot move
+                }
+            }
+            System.out.println(this);
+            winner = checkWinner();
+        }
+        endingMessage(winner);
+    }
+
+    /**
+     * Prompts the user to determine the number of human players.
+     * If the user enters <1>, they will play against an Bot program.
+     * If the user enters <2>, they will play against another human.
+     * 
+     * @return The user's choice.
+     */
+    public int gameOptions() {
+        System.out.println("Welcome to Connect 4!");
+        System.out.println("How many human players are there (1 or 2) ?");
+        String inputString = input.next();
+        int choice = Integer.valueOf(inputString);
+        if (choice != 1 && choice != 2)
+            return -1;
+        return choice;
+    }
+
+    /**
      * Runs the "Main Loop" of the game
      */
     public void runGame() {
-        twoPlayerScenario();
+        int gameMode = gameOptions();
+        if (gameMode == -1) {
+            System.out.println("Invalid number of players, exiting game.");
+            return;
+        }
+
+        if (gameMode == 2)
+            twoPlayerScenario();
+        if (gameMode == 1)
+            humanAiScenario();
     }
 
 }
