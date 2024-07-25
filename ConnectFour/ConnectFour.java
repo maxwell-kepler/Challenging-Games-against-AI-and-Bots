@@ -1,5 +1,7 @@
 package ConnectFour;
 
+import java.util.Scanner;
+
 public class ConnectFour {
     private final int columnCount = 7;
     private final int rowCount = 6;
@@ -11,6 +13,11 @@ public class ConnectFour {
     private final String empty = " ";
     private String currentPlayer;
 
+    private Scanner input;
+
+    /**
+     * Constructs a new Connect Four instance.
+     */
     public ConnectFour() {
         for (int column = 0; column < columnCount; column++) {
             for (int row = 0; row < rowCount; row++) {
@@ -19,6 +26,8 @@ public class ConnectFour {
         }
 
         currentPlayer = player_1;
+        input = new Scanner(System.in);
+
     }
 
     /**
@@ -148,16 +157,102 @@ public class ConnectFour {
             System.out.println("Tie game!");
     }
 
+    // Human input
+    /**
+     * Get the index of a column from a human player.
+     * 
+     * @return true if the piece was successfully place in the column, and false
+     *         otherwise.
+     */
+    private boolean receiveInput() {
+        System.out.println("\nCurrent player: " + currentPlayer);
+        System.out.print("Enter the column where you'd like to drop your piece: ");
+        String inputString = input.next();
+        int column = Integer.valueOf(inputString);
+        return validateInput(column);
+    }
+
+    /**
+     * Validates the user's input.
+     * 
+     * @param column Index of the column to place a piece in to.
+     * @return true if the piece was successfully placed.
+     * @return false if an error has occured.
+     */
+    private boolean validateInput(int column) {
+        try {
+            this.putPiece(column);
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.toString());
+            return false;
+        } catch (Exception e) {
+            System.out.println(e);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Method that takes a column index, and attempts to put a piece in that column.
+     * 
+     * @param column Index of the column to place a piece in to.
+     * @throws IllegalArgumentException If the column number is out of bounds.
+     * @throws IllegalArgumentException If the column is full.
+     */
+    private void putPiece(int column) throws IllegalArgumentException {
+        // Column is out of bounds:
+        if ((column < 0) || (column >= columnCount))
+            throw new IllegalArgumentException("Invalid board position");
+        // Column is full:
+        if (board[column][0] != empty)
+            throw new IllegalArgumentException("Board Position Occupied");
+
+        int availableRow = dropsToRow(column, board);
+        board[column][availableRow] = currentPlayer;
+        currentPlayer = currentPlayer == player_1 ? player_2 : player_1;
+    }
+
+    /**
+     * Finds the row that a piece would land in for a given column.
+     * 
+     * @param column Index of the column to check.
+     * @param board  Current state of the board.
+     * @return The row index for the given column.
+     */
+    private int dropsToRow(int column, String[][] board) {
+        int firstAvailableRow = 0;
+        while (firstAvailableRow < rowCount - 1 && board[column][firstAvailableRow + 1] == empty) {
+            firstAvailableRow++;
+        }
+        return firstAvailableRow;
+    }
+
+    /**
+     * Game mode where 2 human players face off against each other.
+     * The terminal will prompt them for their moves.
+     */
+    public void twoPlayerScenario() {
+        String winner = null;
+        while (winner == null) {
+            boolean validMove = false;
+            while (!validMove) {
+                if (currentPlayer == player_1) {
+                    validMove = receiveInput();
+                } else {
+                    validMove = receiveInput();
+                }
+            }
+            System.out.println(this);
+            winner = checkWinner();
+        }
+        endingMessage(winner);
+    }
+
     /**
      * Runs the "Main Loop" of the game
      */
     public void runGame() {
-        board[0][5] = currentPlayer;
-        board[0][4] = currentPlayer;
-        board[0][3] = currentPlayer;
-        board[0][2] = currentPlayer;
-        System.out.println(this);
-
-        endingMessage(checkWinner());
+        twoPlayerScenario();
     }
+
 }
