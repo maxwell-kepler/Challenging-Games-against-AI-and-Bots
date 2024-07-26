@@ -23,22 +23,36 @@ public class ConnectFour {
     // Util
     private Scanner input;
     private Random rand;
+    private final boolean displayExtraInfo = true;
 
     // Bot
     private final int BotSkillset_1 = 100;
-    private final int BotSkillset_2 = 70;
+    private final int BotSkillset_2 = 100;
     private final int BotMoveTimeMillisec = 100;
 
     // Minimax
     private Dictionary<String, Integer> moveScores = new Hashtable<>();
     private int AlphaBetaPruningIterCount;
     private final int AlphaBetaMaxDepth = 9;
-    private final boolean showCount = true;
 
     /**
      * Constructs a new Connect Four instance.
      */
     public ConnectFour() {
+        resetGame();
+
+        input = new Scanner(System.in);
+        rand = new Random();
+
+        moveScores.put(player_1, -AlphaBetaMaxDepth); // Thus smaller number means player_1 advantage
+        moveScores.put(player_2, AlphaBetaMaxDepth); // and larger values means player_2 advantage
+        moveScores.put(tie, 0);
+    }
+
+    /**
+     * Helper function to reset the game, and sets the current player to 1
+     */
+    private void resetGame() {
         for (int column = 0; column < columnCount; column++) {
             for (int row = 0; row < rowCount; row++) {
                 board[column][row] = empty;
@@ -46,13 +60,6 @@ public class ConnectFour {
         }
 
         currentPlayer = player_1;
-
-        input = new Scanner(System.in);
-        rand = new Random();
-
-        moveScores.put(player_2, 10);
-        moveScores.put(player_1, -10);
-        moveScores.put(tie, 0);
     }
 
     /**
@@ -69,6 +76,7 @@ public class ConnectFour {
                 transposedGrid[row][col] = board[col][row];
             }
         }
+
         sb.append(doubleDashedLine);
         for (int row = 0; row < rowCount; row++) {
             for (int col = 0; col < columnCount; col++) {
@@ -90,6 +98,8 @@ public class ConnectFour {
                 sb.append(dashedLine);
         }
         sb.append(doubleDashedLine);
+        if (displayExtraInfo)
+            sb.append("0|1|2|3|4|5|6");
         return sb.toString();
     }
 
@@ -312,34 +322,64 @@ public class ConnectFour {
     /**
      * Drops a piece in the column with the best score.
      * The score is determined from the minimax algorithm using Alpha Beta pruning.
-     * If it's the first move of the game, drops the piece in the middle column.
      * 
      * @return boolean value indicating if the move was successful
      */
     public boolean bestMoveWithAlphaBetaPruning() {
-        int bestScore = Integer.MIN_VALUE;
-        int move_col = -1;
         AlphaBetaPruningIterCount = 0;
 
-        if (openSpots() == 7 * 6)
-            return validateInput(3);
+        List<Integer> bestScoresList = new ArrayList<>();
+        List<Integer> bestColsList = new ArrayList<>();
+
+        boolean isMaximizing = (currentPlayer == player_2);
 
         for (int col = 0; col < columnCount; col++) {
             if (board[col][0] == empty) {
                 int availableRow = dropsToRow(col, board);
-                board[col][availableRow] = player_2;
-                int score = minimaxAlphaBetaPruning(board, 0, Integer.MIN_VALUE, Integer.MAX_VALUE, false);
+                board[col][availableRow] = currentPlayer;
 
+                int score = minimaxAlphaBetaPruning(board, 0, Integer.MIN_VALUE, Integer.MAX_VALUE, !isMaximizing);
+
+                if (displayExtraInfo)
+                    System.out.println(col + "," + score);
                 board[col][availableRow] = empty;
-                if (score > bestScore) {
-                    bestScore = score;
-                    move_col = col;
+                if (bestColsList.isEmpty()) {
+                    bestScoresList.add(score);
+                    bestColsList.add(col);
+                } else if (isMaximizing && score > bestScoresList.get(0)) { // Trying to maximize, i.e. player_2, thus
+                                                                            // we want the highest score
+                    if (!bestScoresList.isEmpty())
+                        bestScoresList.clear();
+                    if (!bestColsList.isEmpty())
+                        bestColsList.clear();
+                    bestScoresList.add(score);
+                    bestColsList.add(col);
+                } else if (!isMaximizing && score < bestScoresList.get(0)) { // Trying to minimize, i.e. player_1, thus
+                                                                             // we want the lowest score
+                    if (!bestScoresList.isEmpty())
+                        bestScoresList.clear();
+                    if (!bestColsList.isEmpty())
+                        bestColsList.clear();
+                    bestScoresList.add(score);
+                    bestColsList.add(col);
+                }
+
+                else if (score == bestScoresList.get(0)) {
+                    bestScoresList.add(score);
+                    bestColsList.add(col);
                 }
             }
+
         }
-        if (showCount)
+        int finalScore, finalCols;
+        int index = rand.nextInt(bestScoresList.size());
+        finalScore = bestScoresList.get(index);
+        finalCols = bestColsList.get(index);
+        if (displayExtraInfo) {
+            System.out.println("Col: " + finalCols + ", score:" + finalScore);
             System.out.println("\nAB: " + AlphaBetaPruningIterCount);
-        return validateInput(move_col);
+        }
+        return validateInput(finalCols);
     }
 
     /**
@@ -363,9 +403,13 @@ public class ConnectFour {
             return moveScores.get(tie);
 
         String result = checkWinner();
-        if (result != null)
-            return moveScores.get(result);
-
+        if (result != null) {
+            if (result == player_1) // Since player_1 is a negative value
+                return moveScores.get(result) + depth;
+            else
+                return moveScores.get(result) - depth;
+            // return moveScores.get(result);
+        }
         if (isMaximizing) {
             int bestScore = Integer.MIN_VALUE;
             for (int col = 0; col < columnCount; col++) {
@@ -458,6 +502,7 @@ public class ConnectFour {
 
     /**
      * Prompts the user to determine the number of human players.
+     * If the user enters <0>, a Bot program will play against another Bot program.
      * If the user enters <1>, they will play against an Bot program.
      * If the user enters <2>, they will play against another human.
      * 
@@ -489,7 +534,5 @@ public class ConnectFour {
             humanAiScenario();
         if (gameMode == 0)
             BotScenario();
-
     }
-
 }
