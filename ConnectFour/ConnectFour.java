@@ -12,6 +12,7 @@ public class ConnectFour {
     private final int columnCount = 7;
     private final int rowCount = 6;
     private String board[][] = new String[columnCount][rowCount];
+    private int numberOfPiecesPlaced;
 
     // Player
     private final String player_1 = "R";
@@ -25,15 +26,19 @@ public class ConnectFour {
     private Random rand;
     private final boolean displayExtraInfo = true;
 
+    public static final String ANSI_RESET = "\u001B[0m";
+    public static final String ANSI_RED = "\u001B[31m";
+    public static final String ANSI_YELLOW = "\u001B[33m";
+
     // Bot
     private final int BotSkillset_1 = 100;
     private final int BotSkillset_2 = 100;
-    private final int BotMoveTimeMillisec = 100;
+    private final int BotThinkTimeMilli = 250;
 
     // Minimax
     private Dictionary<String, Integer> moveScores = new Hashtable<>();
     private int AlphaBetaPruningIterCount;
-    private final int AlphaBetaMaxDepth = 9;
+    private final int AlphaBetaMaxDepth = 10;
 
     /**
      * Constructs a new Connect Four instance.
@@ -47,6 +52,9 @@ public class ConnectFour {
         moveScores.put(player_1, -AlphaBetaMaxDepth); // Thus smaller number means player_1 advantage
         moveScores.put(player_2, AlphaBetaMaxDepth); // and larger values means player_2 advantage
         moveScores.put(tie, 0);
+        numberOfPiecesPlaced = 0;
+
+        runGame();
     }
 
     /**
@@ -58,8 +66,8 @@ public class ConnectFour {
                 board[column][row] = empty;
             }
         }
-
         currentPlayer = player_1;
+
     }
 
     /**
@@ -82,10 +90,10 @@ public class ConnectFour {
             for (int col = 0; col < columnCount; col++) {
                 switch (transposedGrid[row][col]) {
                     case player_1:
-                        sb.append(player_1);
+                        sb.append(ANSI_RED + player_1 + ANSI_RESET);
                         break;
                     case player_2:
-                        sb.append(player_2);
+                        sb.append(ANSI_YELLOW + player_2 + ANSI_RESET);
                         break;
                     default:
                         sb.append(empty);
@@ -143,6 +151,10 @@ public class ConnectFour {
      * @return null if the game isn't complete
      */
     private String checkWinner() {
+        // Early exit as a game can't be finished with less than 7 pieces played
+        if (numberOfPiecesPlaced < 7)
+            return null;
+
         // Horizontal check
         for (int row = 0; row < rowCount; row++)
             for (int col = 0; col < 4; col++)
@@ -184,12 +196,14 @@ public class ConnectFour {
      * @param outcome The outcome of the game
      */
     public void endingMessage(String outcome) {
-        if (outcome == player_1)
-            System.out.println("Player 1 wins!");
-        if (outcome == player_2)
-            System.out.println("Player 2 wins!");
         if (outcome == tie)
             System.out.println("Tie game!");
+        if (outcome == player_1)
+            System.out.print(ANSI_RED + "Player 1 wins" + ANSI_RESET);
+        else if (outcome == player_2)
+            System.out.print(ANSI_YELLOW + "Player 2 wins" + ANSI_RESET);
+        System.out.println(" in " + numberOfPiecesPlaced + " moves!");
+
     }
 
     // Human input
@@ -244,6 +258,7 @@ public class ConnectFour {
         int availableRow = dropsToRow(column, board);
         board[column][availableRow] = currentPlayer;
         currentPlayer = currentPlayer == player_1 ? player_2 : player_1;
+        numberOfPiecesPlaced++;
     }
 
     /**
@@ -259,28 +274,6 @@ public class ConnectFour {
             firstAvailableRow++;
         }
         return firstAvailableRow;
-    }
-
-    /**
-     * Game mode where 2 human players face off against each other.
-     * The terminal will prompt them for their moves.
-     */
-    public void twoPlayerScenario() {
-        String winner = null;
-        while (winner == null) {
-            boolean validMove = false;
-            System.out.println("\nCurrent player: " + currentPlayer);
-            while (!validMove) {
-                if (currentPlayer == player_1) {
-                    validMove = receiveInput();
-                } else {
-                    validMove = receiveInput();
-                }
-            }
-            System.out.println(this);
-            winner = checkWinner();
-        }
-        endingMessage(winner);
     }
 
     /**
@@ -331,14 +324,14 @@ public class ConnectFour {
         List<Integer> bestScoresList = new ArrayList<>();
         List<Integer> bestColsList = new ArrayList<>();
 
-        boolean isMaximizing = (currentPlayer == player_2);
+        boolean isMaximizing = (currentPlayer == player_1);
 
         for (int col = 0; col < columnCount; col++) {
             if (board[col][0] == empty) {
                 int availableRow = dropsToRow(col, board);
                 board[col][availableRow] = currentPlayer;
 
-                int score = minimaxAlphaBetaPruning(board, 0, Integer.MIN_VALUE, Integer.MAX_VALUE, !isMaximizing);
+                int score = minimaxAlphaBetaPruning(board, 0, Integer.MIN_VALUE, Integer.MAX_VALUE, isMaximizing);
 
                 if (displayExtraInfo)
                     System.out.println(col + "," + score);
@@ -346,16 +339,18 @@ public class ConnectFour {
                 if (bestColsList.isEmpty()) {
                     bestScoresList.add(score);
                     bestColsList.add(col);
-                } else if (isMaximizing && score > bestScoresList.get(0)) { // Trying to maximize, i.e. player_2, thus
-                                                                            // we want the highest score
+                } else if ((currentPlayer == player_2) && score > bestScoresList.get(0)) { // Trying to maximize, i.e.
+                                                                                           // player_2, thus
+                    // we want the highest score
                     if (!bestScoresList.isEmpty())
                         bestScoresList.clear();
                     if (!bestColsList.isEmpty())
                         bestColsList.clear();
                     bestScoresList.add(score);
                     bestColsList.add(col);
-                } else if (!isMaximizing && score < bestScoresList.get(0)) { // Trying to minimize, i.e. player_1, thus
-                                                                             // we want the lowest score
+                } else if ((currentPlayer == player_1) && score < bestScoresList.get(0)) { // Trying to minimize, i.e.
+                                                                                           // player_1, thus
+                    // we want the lowest score
                     if (!bestScoresList.isEmpty())
                         bestScoresList.clear();
                     if (!bestColsList.isEmpty())
@@ -406,9 +401,9 @@ public class ConnectFour {
         if (result != null) {
             if (result == player_1) // Since player_1 is a negative value
                 return moveScores.get(result) + depth;
-            else
+            else if (result == player_2)
                 return moveScores.get(result) - depth;
-            // return moveScores.get(result);
+            return moveScores.get(result);
         }
         if (isMaximizing) {
             int bestScore = Integer.MIN_VALUE;
@@ -447,6 +442,39 @@ public class ConnectFour {
     }
 
     /**
+     * Helper function to display the current player
+     */
+    public void displayCurrentPlayer() {
+        if (currentPlayer == player_1)
+            System.out.println("\nCurrent player: " + ANSI_RED + currentPlayer + ANSI_RESET);
+        else
+            System.out.println("\nCurrent player: " + ANSI_YELLOW + currentPlayer + ANSI_RESET);
+    }
+
+    // SCENARIOS
+    /**
+     * Game mode where 2 human players face off against each other.
+     * The terminal will prompt them for their moves.
+     */
+    public void twoPlayerScenario() {
+        String winner = null;
+        while (winner == null) {
+            boolean validMove = false;
+            displayCurrentPlayer();
+            while (!validMove) {
+                if (currentPlayer == player_1) {
+                    validMove = receiveInput();
+                } else {
+                    validMove = receiveInput();
+                }
+            }
+            System.out.println(this);
+            winner = checkWinner();
+        }
+        endingMessage(winner);
+    }
+
+    /**
      * Game mode where a human player face off against an Bot program.
      * The terminal will prompt them for their moves.
      */
@@ -459,7 +487,7 @@ public class ConnectFour {
         String winner = null;
         while (winner == null) {
             boolean validMove = false;
-            System.out.println("\nCurrent player: " + currentPlayer);
+            displayCurrentPlayer();
             while (!validMove) {
                 if (currentPlayer == player_1) {
                     validMove = receiveInput(); // human move
@@ -482,6 +510,7 @@ public class ConnectFour {
 
         while (winner == null) {
             boolean validMove = false;
+            displayCurrentPlayer();
             while (!validMove) {
                 if (currentPlayer == player_1) {
                     validMove = humanPlayerSimulator(BotSkillset_1);
@@ -489,15 +518,44 @@ public class ConnectFour {
                     validMove = humanPlayerSimulator(BotSkillset_2);
                 }
             }
+            if (numberOfPiecesPlaced < 7) {
+                try {
+                    Thread.sleep(BotThinkTimeMilli);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
             System.out.println(this);
             winner = checkWinner();
-            try {
-                Thread.sleep(BotMoveTimeMillisec);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
         }
         endingMessage(winner);
+    }
+
+    /**
+     * Simulate multiple round of Bot vs Bot, allows for testing different AI models
+     */
+    public void roundSimulator() {
+        int numberOfRounds = 5;
+        System.out.println("Will simulate " + numberOfRounds + " rounds");
+        int[] arr = new int[numberOfRounds];
+
+        for (int i = 0; i < numberOfRounds; i++) {
+            System.out.println("GAME #:" + (i + 1));
+            resetGame();
+            BotScenario();
+            arr[i] = numberOfPiecesPlaced;
+            System.out.println("They won in " + numberOfPiecesPlaced +
+                    " moves!");
+            System.out.println("########################################################");
+            System.out.println("########################################################");
+            System.out.println("########################################################");
+        }
+
+        int count = 1;
+        for (int i : arr) {
+            System.out.println("Game #" + (count++) + " had " + i + " moves");
+        }
     }
 
     /**
@@ -505,15 +563,17 @@ public class ConnectFour {
      * If the user enters <0>, a Bot program will play against another Bot program.
      * If the user enters <1>, they will play against an Bot program.
      * If the user enters <2>, they will play against another human.
+     * If the user enters <4>, the Bots will simulate multiple rounds.
      * 
      * @return The user's choice.
      */
     public int gameOptions() {
         System.out.println("Welcome to Connect 4!");
         System.out.println("How many human players are there (0 or 1 or 2) ?");
+        System.out.println("Or would you like to simulate the Bots (4)?");
         String inputString = input.next();
         int choice = Integer.valueOf(inputString);
-        if (choice != 0 && choice != 1 && choice != 2)
+        if (choice != 0 && choice != 1 && choice != 2 && choice != 4)
             return -1;
         return choice;
     }
@@ -534,5 +594,7 @@ public class ConnectFour {
             humanAiScenario();
         if (gameMode == 0)
             BotScenario();
+        if (gameMode == 4)
+            roundSimulator();
     }
 }
